@@ -1,0 +1,25 @@
+[Unit]
+Description=Model Arena Telegram bot (@ModelArenaRU_bot)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=arenabot
+Group=arenabot
+WorkingDirectory=/opt/model-arena-bot
+Environment=BOT_TOKEN_FILE=/opt/model-arena-bot/secrets/bot.token
+Environment=PROXYAPI_KEY_FILE=/opt/model-arena-bot/secrets/proxyapi.key
+Environment=GIGACHAT_AUTH_KEY_FILE=/opt/model-arena-bot/secrets/gigachat-auth.key
+Environment=YANDEX_API_KEY_FILE=/opt/model-arena-bot/secrets/yandex-api.key
+Environment=YANDEX_FOLDER_ID_FILE=/opt/model-arena-bot/secrets/yandex-folder.id
+# Telegram id владельцев без дневного лимита, через запятую
+Environment=ARENA_ADMINS=
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/model-arena-bot/.venv/bin/python /opt/model-arena-bot/bot.py
+Restart=always
+RestartSec=10
+MemoryMax=300M
+
+[Install]
+WantedBy=multi-user.target
