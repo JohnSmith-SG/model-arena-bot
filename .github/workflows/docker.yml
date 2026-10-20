@@ -1,0 +1,39 @@
+# Сборка Docker-образа при каждом push в main и выкладка в GitHub Container Registry.
+# Сервер раз в час проверяет :latest и сам перезапускает бота на новой версии (deploy/docker/).
+name: docker
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      # Встроенный GITHUB_TOKEN — отдельный ключ для реестра не нужен
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          platforms: linux/amd64
+          tags: |
+            ghcr.io/johnsmith-sg/model-arena-bot:latest
+            ghcr.io/johnsmith-sg/model-arena-bot:${{ github.sha }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.description=Telegram-бот «Арена моделей»: один вопрос — три нейросети

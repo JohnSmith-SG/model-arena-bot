@@ -185,11 +185,14 @@ async def ask(model: Model, question: str, system: str = SYSTEM, on_text: OnText
     except Exception as e:  # noqa: BLE001 — любая ошибка провайдера = «модель не ответила»
         secs = round(time.monotonic() - t0, 1)
         msg = "не ответила за отведённое время" if isinstance(e, asyncio.TimeoutError) else str(e)[:200]
-        log.warning("AI %s failed in %ss: %r", model.key, secs, e)
+        log.warning("AI %s failed in %ss: %r", model.key, secs, e,
+                    extra={"event": "ai_error", "model": model.key, "seconds": secs})
         return Answer("", secs, error=msg)
     secs = round(time.monotonic() - t0, 1)
     cost = (tin * model.price_in + tout * model.price_out) / 1_000_000
-    log.info("AI %s: %ss, tokens %s/%s, %.3f ₽", model.key, secs, tin, tout, cost)
+    log.info("AI %s: %ss, tokens %s/%s, %.3f ₽", model.key, secs, tin, tout, cost,
+             extra={"event": "ai_answer", "model": model.key, "seconds": secs,
+                    "tokens_in": tin, "tokens_out": tout, "cost_rub": round(cost, 4)})
     return Answer(text.strip(), secs, tin, tout, cost)
 
 

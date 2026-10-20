@@ -33,11 +33,29 @@ import storage
 from catalog import DEFAULT_WORLD, FREE_DAILY_LIMIT, MODELS, RUSSIAN, TOPICS, WORLD, Model
 
 # Журнал: bot.log до 1 МБ + 3 архива (bot.log.1…3), старое удаляется само — не больше ~4 МБ.
-# В консоль — только при ручном запуске: на сервере вывод службы ушёл бы ещё и в системный журнал.
+# В консоль — при ручном запуске и в Docker (LOG_TO_STDOUT=1 → docker logs).
 _handlers: list[logging.Handler] = [RotatingFileHandler(
-    Path(__file__).with_name("bot.log"), maxBytes=1_000_000, backupCount=3, encoding="utf-8")]
-if sys.stdout.isatty():
-    _handlers.append(logging.StreamHandler())
+    storage.DATA_DIR / "bot.log", maxBytes=1_000_000, backupCount=3, encoding="utf-8")]
+if sys.stdout.isatty() or os.environ.get("LOG_TO_STDOUT") == "1":
+    _handlers.append(logging.StreamHandler(sys.stdout))
+
+
+def _secret(name: str) -> str:
+    """Значение из NAME или из файла NAME_FILE; пусто, если не задано."""
+    if os.environ.get(name):
+        return os.environ[name].strip()
+    path = os.environ.get(name + "_FILE")
+    return Path(path).read_text(encoding="utf-8").strip() if path and Path(path).exists() else ""
+
+
+# Внешний журнал Better Stack (Logtail) — включается, только если заданы токен и адрес источника
+_bs_token, _bs_host = _secret("BETTERSTACK_SOURCE_TOKEN"), _secret("BETTERSTACK_HOST")
+BETTERSTACK_ON = bool(_bs_token and _bs_host)
+if BETTERSTACK_ON:
+    from logtail import LogtailHandler
+    _handlers.append(LogtailHandler(source_token=_bs_token, host=_bs_host
+                                    if _bs_host.startswith("http") else "https://" + _bs_host))
+del _bs_token
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s",
                     handlers=_handlers)
 # Служебный шум библиотек (каждый HTTP-запрос и каждое нажатие) — только при ошибках
@@ -284,7 +302,8 @@ async def run_round(msg: Message, user_id: int, topic: str, question: str) -> No
 async def _run_round(msg: Message, user_id: int, topic: str, question: str) -> None:
     models = [user_model(user_id), *RUSSIAN]
     round_id = storage.new_round(user_id, topic, question)
-    log.info("round %s user=%s topic=%s models=%s", round_id, user_id, topic, [m.key for m in models])
+    log.info("round %s user=%s topic=%s models=%s", round_id, user_id, topic, [m.key for m in models],
+             extra={"event": "round", "round_id": round_id, "user_id": user_id, "topic": topic})
     state = [{"chars": 0, "done": None, "error": False} for _ in models]
     render = round_board(models, state)
     board = await msg.answer(render(0))
@@ -321,7 +340,8 @@ async def vote(c: CallbackQuery):
     round_id = storage.rate(int(answer_id), c.from_user.id, int(score))
     if round_id is None:
         return await c.answer("Оценивать может только тот, кто задал вопрос")
-    log.info("vote user=%s answer=%s score=%s", c.from_user.id, answer_id, score)
+    log.info("vote user=%s answer=%s score=%s", c.from_user.id, answer_id, score,
+             extra={"event": "vote", "user_id": c.from_user.id, "score": score})
     await c.message.edit_reply_markup(reply_markup=rating_kb(int(answer_id), int(score)))
     await c.answer(f"Оценка {score}⭐ сохранена")
     await maybe_summary(c.message, round_id)
@@ -460,6 +480,7 @@ async def main():
     proxy = urllib.request.getproxies().get("https")
     session = AiohttpSession(proxy=proxy) if proxy else None
     log.info("proxy: %s", proxy or "нет")
+    log.info("внешний журнал Better Stack: %s", "включён" if BETTERSTACK_ON else "выключен")
     bot = Bot(token, session=session, default=DefaultBotProperties(parse_mode="HTML"))
     dp = Dispatcher()
     dp.include_router(router)

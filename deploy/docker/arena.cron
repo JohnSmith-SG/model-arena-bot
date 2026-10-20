@@ -1,0 +1,2 @@
+# Автообновление бота «Арена моделей» — каждый час в :05 (на сервере — /etc/cron.d/model-arena-bot)
+5 * * * * root /opt/model-arena-bot/docker/update.sh >/dev/null 2>&1

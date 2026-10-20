@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+*.db
+*.log*
+.env
+secrets/
+*.key
+*.token
+branding/
+tools/
+.git/
+.github/

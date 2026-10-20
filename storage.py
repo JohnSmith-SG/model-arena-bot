@@ -2,11 +2,14 @@
 
 Раунд ≈ 7 КБ (вопрос + 3 ответа по ~1000 знаков), 1000 раундов ≈ 7 МБ — для сервера мелочь.
 """
+import os
 import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-DB = Path(__file__).with_name("arena.db")
+# В Docker база живёт в томе /data (ARENA_DATA_DIR), чтобы переживать обновление контейнера
+DATA_DIR = Path(os.environ.get("ARENA_DATA_DIR") or Path(__file__).parent)
+DB = DATA_DIR / "arena.db"
 MSK = timezone(timedelta(hours=3))  # «день» для лимита — по Москве
 
 
