@@ -31,6 +31,7 @@ jobs:
           context: .
           push: true
           platforms: linux/amd64
+          build-args: GIT_SHA=${{ github.sha }}
           tags: |
             ghcr.io/johnsmith-sg/model-arena-bot:latest
             ghcr.io/johnsmith-sg/model-arena-bot:${{ github.sha }}

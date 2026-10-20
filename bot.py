@@ -486,7 +486,8 @@ async def main():
     dp.include_router(router)
     await bot.set_my_commands([BotCommand(command="start", description="Главное меню")])
     await bot.delete_webhook(drop_pending_updates=True)
-    log.info("bot started")
+    version = os.environ.get("ARENA_VERSION", "local")[:7]
+    log.info("bot started, версия %s", version, extra={"event": "start", "version": version})
     await dp.start_polling(bot)
 
 

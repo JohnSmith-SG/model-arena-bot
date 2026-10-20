@@ -43,7 +43,8 @@ Python · aiogram 3 · SQLite · direct GigaChat / YandexGPT REST APIs · OpenAI
 ## Стек
 
 Python 3.10+ · [aiogram 3](https://docs.aiogram.dev/) · aiohttp · openai (ProxyAPI) · SQLite ·
-GigaChat API · Yandex Foundation Models API · systemd.
+GigaChat API · Yandex Foundation Models API · Docker · GitHub Actions · GitHub Container Registry ·
+cron · Better Stack (Logtail).
 
 ## Структура
 
@@ -55,7 +56,9 @@ GigaChat API · Yandex Foundation Models API · systemd.
 | `storage.py` | SQLite: пользователи, раунды, ответы, оценки, рейтинги |
 | `certs/` | корневой сертификат Russian Trusted Root CA (публичный, для HTTPS к GigaChat) |
 | `tools/check_providers.py` | проверка подключений без Telegram: один вопрос → ответ, время, цена |
-| `deploy/` | unit-файл systemd и зависимости для сервера |
+| `Dockerfile`, `.github/workflows/docker.yml` | образ бота и его автосборка в GitHub Container Registry |
+| `deploy/docker/` | скрипт автообновления на сервере (`update.sh`), задание cron, шаблон переменных |
+| `deploy/` | зависимости для сервера; unit-файл systemd (прежний способ запуска) |
 
 ## Запуск локально
 
@@ -67,11 +70,27 @@ python -m venv .venv
 .venv/Scripts/python bot.py
 ```
 
-## Сервер
+## Сервер: Docker + автообновление
 
-`deploy/model-arena-bot.service` — служба systemd под отдельным пользователем без прав root:
-`Restart=always`, ограничение памяти 300 МБ, ключи читаются из файлов (`*_FILE`). Бот занимает
-около 185 МБ памяти; раунд в базе ≈ 7 КБ. Журнал — до 1 МБ + 3 архива, старое удаляется само.
+```
+git push → GitHub Actions собирает образ → ghcr.io/johnsmith-sg/model-arena-bot:latest
+         → сервер (cron, каждый час) скачивает образ → если он новый, пересоздаёт контейнер
+```
+
+- **Образ** (`Dockerfile`): python:3.12-slim, бот работает не от root. Ключей в образе нет —
+  они лежат файлами на сервере и монтируются в контейнер только для чтения (`*_FILE`). Поэтому
+  образ публичный, и серверу не нужен пароль от реестра.
+- **Данные** — в томе `/data`: база SQLite и `bot.log` переживают любое обновление.
+- **Автообновление** — `deploy/docker/update.sh` по cron в :05 каждого часа: `docker pull` →
+  сравнение id образа → `docker run` с `--restart unless-stopped`, лимитом памяти 300 МБ и
+  ротацией журнала Docker. Каждое действие пишется в `update.log`.
+- **Версия**: в образ зашивается коммит, из которого он собран, — бот пишет её в журнал при старте.
+- **Внешний журнал — Better Stack (Logtail).** Записи бота сразу уходят в облако: поиск и фильтры
+  в браузере, история не теряется при пересоздании контейнера. У событий раунда, оценки и ответа
+  модели есть поля (`event`, `model`, `seconds`, `cost_rub`…) — по ним удобно фильтровать.
+  Включается, если заданы `BETTERSTACK_SOURCE_TOKEN(_FILE)` и `BETTERSTACK_HOST`.
+
+Бот занимает около 185 МБ памяти; раунд в базе ≈ 7 КБ. Журнал — до 1 МБ + 3 архива.
 
 ## История
 
